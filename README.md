@@ -3,21 +3,15 @@
 [![Build Windows](https://github.com/LiteZero/SPlayerEC/actions/workflows/build.yml/badge.svg)](https://github.com/LiteZero/SPlayerEC/actions/workflows/build.yml)
 [![License: LGPL-3.0-or-later](https://img.shields.io/badge/License-LGPL--3.0--or--later-blue.svg)](LICENSE)
 
-通过 SPlayer-Next 的现有插件 API，将当前歌词发送到迈从 K20 GT 音箱
+通过 SPlayer-Next 的现有插件 API，将当前歌词发送到迈从 K20 GT 音箱，从而实现类似于官方的桌面歌词功能。
 
-插件和 USB 桥接程序均独立于播放器，不需要编译或替换 SPlayer。适用于 64 位 Windows 10/11，以及提供插件 API 2 或更高版本的 SPlayer-Next，已验证安装版 1.1.0 的 API 3 宿主
-
-## 1.0.1 兼容性更新
-
-修复「plugin requires apiLevel 4 but host supports 3」导入报错，并补齐旧版必需的 `@type control` 声明。API 2/3 使用播放进度和歌词行事件，API 4 及以上继续使用播放快照
-
-已有桥接程序无需重装，只需重新导入本目录的 `plugin/k20gt-lyrics.js`。若插件列表中有旧版失败条目，先删除再导入，确认版本为 1.0.1 并允许 `network` 和 `control` 权限
+适用于 64 位 Windows 10/11，以及提供插件 API 2 或更高版本的 SPlayer-Next
 
 ## 开始使用
 
-1. 安装 `dist/SPlayerEC-1.0.1-x64-setup.exe`，或解压便携包后运行 `SPlayerEC-Bridge.exe`
-2. 用 USB 连接 K20 GT，关闭 MCHOSE HUB 的歌词同步。如果使用此前已加入内置 K20 GT 功能的 SPlayer，也请关闭「设置 → 外部歌词 → 迈从 K20 GT 音箱」中的同步开关，避免争用
-3. 在 SPlayer 中打开「设置 → 插件管理 → 本地导入」，选择 `plugin/k20gt-lyrics.js`。桥接程序窗口有「打开插件文件夹」按钮
+1. 安装 `SPlayerEC`，或解压便携包后运行 `SPlayerEC-Bridge.exe`
+2. 用 USB 连接 K20 GT，关闭 MCHOSE HUB 的歌词同步。
+3. 在 SPlayer 中打开「设置 → 插件管理 → 本地导入」，选择 `k20gt-lyrics.js`。桥接程序窗口有「打开插件文件夹」按钮
 4. 确认插件已启用，并保留 `network` 和 `control` 权限。`control` 用于读取播放进度或快照，插件不会执行播放、暂停、切歌或音量修改
 5. 播放带歌词的歌曲，桥接窗口显示「已连接 K20 GT」后即可同步
 
@@ -99,6 +93,4 @@ node --test tests/plugin.test.cjs
 
 本项目原创源码采用 **LGPL-3.0-or-later**，可按 GNU Lesser General Public License 第 3 版或任意后续版本使用、修改和分发。完整条款见 LICENSE / COPYING.LESSER，以及作为其组成部分的 GPL-3.0 条款 COPYING
 
-Copyright (C) 2026 LiteZero
-
-设备协议依据用户提供的前期 USB 控制测试；歌词分页参考 LiteZero 在 SPlayer-Next 中自行添加的 K20 GT 实现（提交 `cf0bdce0`），本仓库不包含 SPlayer-Next 的播放器实现或打包程序。SPlayer-Next 本身仍按其 AGPL-3.0 许可发布，第三方依赖保留各自许可，详见 THIRD_PARTY_NOTICES.md
+本仓库不包含 SPlayer-Next 的播放器实现或打包程序。
