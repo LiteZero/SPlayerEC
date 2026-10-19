@@ -3,7 +3,7 @@
 [![Build Windows](https://github.com/LiteZero/SPlayerEC/actions/workflows/build.yml/badge.svg)](https://github.com/LiteZero/SPlayerEC/actions/workflows/build.yml)
 [![License: LGPL-3.0-or-later](https://img.shields.io/badge/License-LGPL--3.0--or--later-blue.svg)](LICENSE)
 
-通过 SPlayer-Next 的现有插件 API，将当前歌词发送到迈从 K20 GT 音箱，从而实现类似于官方的桌面歌词功能。
+通过 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) 现有的插件 API，将当前歌词发送到迈从 K20 GT 音箱，从而实现类似于官方的桌面歌词功能。
 
 适用于 64 位 Windows 10/11，以及提供插件 API 2 或更高版本的 SPlayer-Next
 
