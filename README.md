@@ -9,6 +9,8 @@
 
 ## 开始使用
 
+可从 [GitHub Releases](https://github.com/LiteZero/SPlayerEC/releases/latest) 下载安装包或便携包
+
 1. 安装 `SPlayerEC`，或解压便携包后运行 `SPlayerEC-Bridge.exe`
 2. 用 USB 连接 K20 GT，关闭 MCHOSE HUB 的歌词同步。
 3. 在 SPlayer 中打开「设置 → 插件管理 → 本地导入」，选择 `k20gt-lyrics.js`。桥接程序窗口有「打开插件文件夹」按钮
@@ -85,7 +87,11 @@ node --test tests/plugin.test.cjs
 
 工作流在 Windows 环境安装 Python 3.14、Node.js 24 和固定版本的构建依赖，运行 24 项自动化测试，再生成安装包、便携包、随附源码 ZIP 和 SHA-256 清单，不依赖 SPlayer 源码或 USB 设备
 
-构建成功后，在该次运行页面的 **Artifacts** 中下载 `SPlayerEC-windows-x64`，解压后可取得安装包和便携包。产物保留 30 天；工作流不会把生成的二进制文件提交回仓库，也不会自动创建 Release
+构建成功后，在该次运行页面的 **Artifacts** 中下载 `SPlayerEC-windows-x64`，解压后可取得安装包和便携包，Actions 产物保留 30 天
+
+推送版本标签（例如 `v1.0.1`）时，工作流会先校验标签与源码版本一致，完成测试、打包与校验后自动创建 GitHub Release，将安装包、便携包和 SHA-256 清单作为附件发布。发布任务仅在版本标签上运行，普通分支与拉取请求只构建，二进制文件始终不会提交回源码仓库
+
+发布新版本时，先统一更新源码和安装脚本中的版本号，再创建并推送对应的 `v*` 标签。发布说明位于 `.github/release-notes.md`
 
 在下载目录执行 `sha256sum -c SHA256SUMS.txt` 可验证安装包和便携包。CI 不执行真机写入、安装卸载和完整播放器联动测试，本机的历史验证范围见 VALIDATION.md
 

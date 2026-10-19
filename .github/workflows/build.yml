@@ -33,6 +33,18 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: python
+        run: |
+          import os
+          import runpy
+
+          version = runpy.run_path("splayerec/__init__.py")["__version__"]
+          build_version = runpy.run_path("scripts/build.py")["VERSION"]
+          if version != build_version or os.environ["GITHUB_REF_NAME"] != f"v{version}":
+              raise SystemExit("Release tag and source versions must match")
+
       - name: Install build dependencies
         run: python -m pip install -r requirements-build.txt
 
@@ -56,3 +68,36 @@ jobs:
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download verified packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: SPlayerEC-windows-x64
+          path: dist
+
+      - name: Verify release checksums
+        working-directory: dist
+        run: sha256sum -c SHA256SUMS.txt
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*-x64-setup.exe \
+            dist/*-x64-portable.zip \
+            dist/SHA256SUMS.txt \
+            --verify-tag \
+            --title "SPlayerEC $GITHUB_REF_NAME" \
+            --notes-file .github/release-notes.md
