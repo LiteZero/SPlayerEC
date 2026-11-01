@@ -1,5 +1,29 @@
 # 验证记录
 
+## 2026-11-01 歌词插件 1.0.2 修复
+
+歌词修复位于插件端，仍兼容 1.0.1 桥接程序。1.0.2 发布将插件、桥接程序和安装包版本统一为 1.0.2，并通过现有 GitHub Actions 构建；发布配置同时提供独立插件 JS、独立桥接 EXE、含二者的安装包与便携包及四个文件的 SHA-256 清单，并验证独立文件与便携包内文件一致。下文的安装及真机记录属于历史版本，不代表本次重新执行。
+
+查阅官方插件 [播放控制文档](https://github.com/SPlayer-Dev/SPlayer-Next/blob/47d74cf1a87cc0f526c25110bb0cb924f6268f1d/docs/plugins/control.md)、[API 变更记录](https://github.com/SPlayer-Dev/SPlayer-Next/blob/47d74cf1a87cc0f526c25110bb0cb924f6268f1d/docs/plugins/changelog.md) 和 [播放事件桥源码](https://github.com/SPlayer-Dev/SPlayer-Next/blob/47d74cf1a87cc0f526c25110bb0cb924f6268f1d/electron/main/plugins/playbackBridge.ts)：API 2 起提供 `playStateChange`，载荷包含 `state: "playing" | "paused" | "stopped"` 及毫秒进度 `position`；当前行以 `startTime` 选取，不以 `endTime` 提前取消。
+
+同时只读检查本机安装的 SPlayer-Next 1.2.0，宿主 API 为 5；安装版事件桥与上述行为一致。本机播放器日志未发现逐次播放状态事件或本插件异常记录，不能用这些日志直接还原用户遇到的具体歌曲问题。
+
+修复内容：
+
+- 暂停、停止事件立即使旧进度请求失效，清屏成功后不再发送请求或轮询进度；恢复事件触发同步。
+- 在途请求完成或失败时不能覆盖更新的暂停状态，发送队列丢弃暂停前积压的歌词。
+- `endTime` 只决定分页速度，末页保持到下一行、明确空行或歌曲结束；无有效 `endTime` 时使用下一行或歌曲结束作为分页边界。
+- 歌曲结束判断使用实际播放进度，避免歌词偏移使尾句提前消失。
+- 与宿主选行一致，没有明确空行的间奏保留上一句；不再仅凭上一句 `endTime` 清屏。
+
+执行 `node --test tests/plugin.test.cjs`，28 项通过。覆盖 API 2/3/4/5 的暂停/停止清屏与持续静默、恢复、长句末页保持、下一行及歌曲结束、空行、UTF-8 分页、歌词偏移、倍速、过期异步结果和失败、慢请求队列及故障恢复。本次未修改 Python 源码，未重新运行 Python 测试。
+
+另外从 `D:/Program Files/SPlayer-Next/resources/app.asar` 只读提取原始插件 worker，在 Node.js 24.21.0 的 `worker_threads` 中适配 `process.parentPort` 后运行原始 VM 沙箱，通过独立的随机回环端口完成真实 HTTP 请求。分别以实际 API 5 及兼容 API 3 运行，验证两页长句、超过 `endTime` 后继续显示、暂停与停止期间各 2.5 秒无请求及进度读取、恢复、下一行、歌曲结束，均通过且无警告或错误日志。
+
+此次 worker 验证使用人工构造的歌词和播放输入，不是 Electron utility process 或完整播放器实播；未向音箱写入，未修改播放器配置。原始记录保存在本机忽略目录 `build/plugin-fix-worker-smoke-api5.json` 和 `build/plugin-fix-worker-smoke-api3.json`。实际歌曲及音箱屏幕表现仍需更新插件后验证。
+
+## 历史验证记录
+
 日期：2026-10-20，时区：Asia/Shanghai
 
 环境：Windows x64，Python 3.14.7，Node.js 24.21.0，Electron 43.2.0

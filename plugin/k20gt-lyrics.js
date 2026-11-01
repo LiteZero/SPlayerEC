@@ -4,7 +4,7 @@
  *
  * @name K20 GT 音箱歌词
  * @id litezero.k20gt-lyrics
- * @version 1.0.1
+ * @version 1.0.2
  * @description 通过本机 SPlayerEC 桥接程序显示歌词，无需修改播放器
  * @author LiteZero
  * @type control
@@ -23,7 +23,7 @@
     let captions = [];
     let trackDuration = 0;
     let anchor = null;
-    let legacyState = "paused";
+    let playbackState = hasSnapshot ? null : "paused";
     let legacyIndex = null;
     let revision = 0;
     let syncing = false;
@@ -135,16 +135,13 @@
      * @returns 当前页或清屏用空字符串
      */
     function currentText(now) {
-      if (
-        !enabled ||
-        !anchor ||
-        ["idle", "loading", "stopped"].includes(anchor.state)
-      )
-        return "";
+      if (!enabled || !anchor || anchor.state !== "playing") return "";
       const elapsed = anchor.playing
         ? Math.max(0, now - anchor.sendTimestamp) * anchor.speed
         : 0;
-      const position = anchor.position + elapsed + anchor.lyricOffsetMs;
+      const playbackPosition = anchor.position + elapsed;
+      if (trackDuration && playbackPosition >= trackDuration) return "";
+      const position = playbackPosition + anchor.lyricOffsetMs;
       const byIndex = !hasSnapshot && legacyIndex !== null;
       const target = byIndex ? legacyIndex : position;
       let low = 0;
@@ -158,13 +155,16 @@
         else high = mid;
       }
       const caption = captions[low - 1];
-      const end = Math.min(caption?.end ?? 0, trackDuration || Infinity);
       if (!caption || !caption.pages.length) return "";
-      if (
-        position >= end &&
-        (!byIndex || position < (captions[low]?.start ?? Infinity))
-      )
-        return "";
+      // 宿主按 startTime 选行，endTime 只用于分页，不能提前退出当前行。
+      const boundary = Math.min(
+        captions[low]?.start ?? Infinity,
+        trackDuration ? trackDuration + anchor.lyricOffsetMs : Infinity,
+      );
+      const end =
+        Number.isFinite(caption.end) && caption.end > caption.start
+          ? Math.min(caption.end, boundary)
+          : boundary;
       const page = Math.max(
         0,
         Math.min(
@@ -214,13 +214,13 @@
       }
     }
 
-    /** 仅在页面变化或续期心跳时发送，停用后不再持续请求 */
+    /** 页面变化时发送；仅在有歌词播放时续期，暂停、停止或空行清屏一次 */
     function tick() {
       const now = Date.now();
       if (!enabled && delivered === "" && pending === null) return;
       const text = currentText(now);
       if (pending !== null) pending = text;
-      if (text !== delivered || (enabled && now - deliveredAt >= 2000)) {
+      if (text !== delivered || (text !== "" && now - deliveredAt >= 2000)) {
         pending = text;
         void drain();
       }
@@ -228,7 +228,8 @@
 
     /** 合并播放位置请求，旧版使用 API 2 进度接口并丢弃过期返回 */
     async function sync() {
-      if (!enabled) return;
+      if (!enabled || (playbackState !== null && playbackState !== "playing"))
+        return;
       if (syncing) {
         syncAgain = true;
         return;
@@ -240,15 +241,19 @@
           ? await splayer.player.getNowPlaying()
           : {
               position: await splayer.player.getPosition(),
-              state: legacyState,
+              state: playbackState,
               playing: false,
               speed: 1,
               lyricOffsetMs: 0,
               sendTimestamp: Date.now(),
             };
-        if (started === revision) anchor = next;
+        if (started === revision) {
+          anchor = next;
+          playbackState = next.state;
+        }
         snapshotWarned = false;
       } catch (error) {
+        if (started !== revision) return;
         anchor = null;
         if (!snapshotWarned)
           splayer.log.warn(
@@ -271,7 +276,6 @@
       revision++;
       captions = [];
       anchor = null;
-      legacyState = "paused";
       legacyIndex = null;
       trackDuration = track?.duration || 0;
       tick();
@@ -293,20 +297,20 @@
       void sync();
     });
     splayer.player.on("playStateChange", ({ state, position }) => {
-      if (!hasSnapshot) {
-        revision++;
-        legacyState = state;
-        anchor = {
-          position,
-          state,
-          playing: false,
-          speed: 1,
-          lyricOffsetMs: 0,
-          sendTimestamp: Date.now(),
-        };
-        tick();
-      }
-      void sync();
+      revision++;
+      playbackState = state;
+      anchor = {
+        speed: 1,
+        lyricOffsetMs: 0,
+        ...anchor,
+        position,
+        state,
+        // API 2/3 不提供速度；继续使用实测进度而非墙钟外推。
+        playing: hasSnapshot && state === "playing",
+        sendTimestamp: Date.now(),
+      };
+      tick();
+      if (state === "playing") void sync();
     });
     splayer.onSettingChange("enabled", (value) => {
       enabled = value !== false;
@@ -322,7 +326,11 @@
       tick();
     });
     setInterval(() => {
-      if (enabled && Date.now() - syncAt >= (hasSnapshot ? 500 : 200))
+      if (
+        enabled &&
+        (playbackState === null || playbackState === "playing") &&
+        Date.now() - syncAt >= (hasSnapshot ? 500 : 200)
+      )
         void sync();
       tick();
     }, 100);

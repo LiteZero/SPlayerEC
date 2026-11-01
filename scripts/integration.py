@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def main():
     """隔离运行交付程序与 SPlayer 插件宿主，验证后清屏退出"""
-    executable = ROOT / "dist" / "SPlayerEC-1.0.1-portable" / "SPlayerEC-Bridge.exe"
+    executable = ROOT / "dist" / "SPlayerEC-1.0.2-portable" / "SPlayerEC-Bridge.exe"
     try:
         with urllib.request.urlopen("http://127.0.0.1:19620/health", timeout=1):
             pass

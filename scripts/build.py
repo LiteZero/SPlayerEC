@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 
 def main():
@@ -123,9 +123,13 @@ def main():
         for path in portable.rglob("*"):
             if path.is_file():
                 archive.write(path, Path("SPlayerEC") / path.relative_to(portable))
+    shutil.copy2(portable / "SPlayerEC-Bridge.exe", dist)
+    shutil.copy2(portable / "plugin" / "k20gt-lyrics.js", dist)
     files = [
         dist / f"SPlayerEC-{VERSION}-x64-setup.exe",
         portable_zip,
+        dist / "SPlayerEC-Bridge.exe",
+        dist / "k20gt-lyrics.js",
     ]
     (dist / "SHA256SUMS.txt").write_text(
         "\n".join(

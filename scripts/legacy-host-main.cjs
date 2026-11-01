@@ -29,7 +29,7 @@ app.disableHardwareAcceleration();
 let worker;
 let server;
 let position = 0;
-let state = "paused";
+let state = "playing";
 let received = "";
 let requestCount = 0;
 
@@ -236,6 +236,22 @@ app
     await expectText(long.slice(0, 17));
     position = 6000;
     await expectText(long.slice(17));
+    position = 11000;
+    await delay(500);
+    assert.equal(received, long.slice(17));
+    state = "paused";
+    event("playStateChange", { state, position });
+    await expectText("");
+    await delay(500);
+    const pausedCount = requestCount;
+    const pausedReads = report.methods["player.getPosition"];
+    await delay(2500);
+    assert.equal(requestCount, pausedCount);
+    assert.equal(report.methods["player.getPosition"], pausedReads);
+    position = 6000;
+    state = "playing";
+    event("playStateChange", { state, position });
+    await expectText(long.slice(17));
     worker.postMessage({
       kind: "settingsUpdate",
       pluginId: fixture.manifest.id,
@@ -266,7 +282,7 @@ app
     });
     await expectText("旧版翻译测试");
     console.log(
-      "API 3 分页、暂停跳转、翻译、停止及停用已通过，开始 60 秒启用采样",
+      "API 3 长句末页保持、暂停静默、恢复、翻译、停止及停用已通过，开始 60 秒启用采样",
     );
     await delay(60000);
     sample("plugin-enabled-60s");

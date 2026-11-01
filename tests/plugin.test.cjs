@@ -164,11 +164,18 @@ test("API 3 按实测进度支持暂停、同一行跳转和倍速", async () =>
   h.snapshot({ position: 1000, playing: false, state: "paused" });
   h.event("playStateChange", { state: "paused", position: 1000 });
   await h.flush();
+  const pausedCount = h.sent.length;
+  const pausedReads = h.reads().position;
   h.step(2000);
   await h.flush();
-  assert.equal(h.sent.at(-1), "a".repeat(52));
+  assert.equal(h.sent.at(-1), "");
   h.snapshot({ position: 6000 });
   h.step(200);
+  await h.flush();
+  assert.equal(h.sent.length, pausedCount);
+  assert.equal(h.reads().position, pausedReads);
+  h.snapshot({ position: 6000, playing: true, state: "playing" });
+  h.event("playStateChange", { state: "playing", position: 6000 });
   await h.flush();
   assert.equal(h.sent.at(-1), "b".repeat(52));
   h.snapshot({ position: 0, speed: 2, playing: true });
@@ -189,8 +196,7 @@ test("API 3 尊重当前行索引并保持背景人声索引对应", async () =>
     line("背景", 500, 1000, { isBG: true }),
     line("提前显示", 5000, 10000),
   ]);
-  h.snapshot({ position: 1000, playing: false });
-  h.event("playStateChange", { state: "paused", position: 1000 });
+  h.snapshot({ position: 1000 });
   h.event("lineChange", { index: 2, position: 1000 });
   await h.flush();
   assert.equal(h.sent.at(-1), "提前显示");
@@ -217,16 +223,18 @@ test("翻译、音译、缺失回退和背景人声过滤", async () => {
   assert.equal(h.sent.at(-1), "回退");
 });
 
-test("暂停保持当前页，同一行内 seek、偏移和倍速被快照纠正", async () => {
+test("暂停清屏，恢复后同一行内 seek、偏移和倍速被快照纠正", async () => {
   const h = harness();
   await prime(h, [line("a".repeat(52) + "b".repeat(52))]);
   h.snapshot({ position: 1000, playing: false, state: "paused" });
-  h.event("playStateChange", {});
+  h.event("playStateChange", { state: "paused", position: 1000 });
   await h.flush();
   h.step(2000);
   await h.flush();
-  assert.equal(h.sent.at(-1), "a".repeat(52));
-  h.snapshot({ position: 6000 });
+  assert.equal(h.sent.at(-1), "");
+  h.snapshot({ position: 6000, state: "playing", playing: true });
+  h.event("playStateChange", { state: "playing", position: 6000 });
+  await h.flush();
   h.step(500);
   await h.flush();
   assert.equal(h.sent.at(-1), "b".repeat(52));
@@ -241,7 +249,7 @@ test("暂停保持当前页，同一行内 seek、偏移和倍速被快照纠正
     state: "playing",
     speed: 2,
   });
-  h.event("playStateChange", {});
+  h.event("playStateChange", { state: "playing", position: 0 });
   await h.flush();
   h.step(2600);
   await h.flush();
@@ -250,7 +258,11 @@ test("暂停保持当前页，同一行内 seek、偏移和倍速被快照纠正
 
 test("间奏、停止、无歌词和插件设置停用清屏", async () => {
   const h = harness();
-  await prime(h, [line("歌词", 0, 1000), line("下一句", 5000, 8000)]);
+  await prime(h, [
+    line("歌词", 0, 1000),
+    line("", 1000, 5000),
+    line("下一句", 5000, 8000),
+  ]);
   h.step(2000);
   await h.flush();
   assert.equal(h.sent.at(-1), "");
@@ -267,7 +279,7 @@ test("间奏、停止、无歌词和插件设置停用清屏", async () => {
   assert.equal(h.sent.length, count);
   h.setting("enabled", true);
   h.snapshot({ state: "stopped", playing: false });
-  h.event("playStateChange", {});
+  h.event("playStateChange", { state: "stopped", position: 6000 });
   await h.flush();
   assert.equal(h.sent.at(-1), "");
   h.event("lyricChange", { lines: [] });
@@ -348,8 +360,8 @@ test("切歌后丢弃旧快照，防止新歌词套用上一首进度", async ()
         });
       return Promise.resolve({
         position: 0,
-        playing: false,
-        state: "paused",
+        playing: true,
+        state: "playing",
         speed: 1,
         lyricOffsetMs: 0,
         sendTimestamp: 100000,
@@ -368,4 +380,169 @@ test("切歌后丢弃旧快照，防止新歌词套用上一首进度", async ()
   });
   await h.flush();
   assert.equal(h.sent.at(-1), "新歌");
+});
+
+for (const apiLevel of [2, 3, 4, 5]) {
+  test(`API ${apiLevel} 暂停和停止各清屏一次，空闲期间不发送也不读取进度`, async () => {
+    const h = harness({ apiLevel });
+    await prime(h, [line("a".repeat(52) + "b".repeat(52))]);
+    for (const state of ["paused", "stopped"]) {
+      h.snapshot({ state, playing: false, position: 1000 });
+      const before = h.sent.length;
+      h.event("playStateChange", { state, position: 1000 });
+      await h.flush();
+      assert.equal(h.sent.at(-1), "");
+      assert.equal(h.sent.length, before + 1);
+      const reads = h.reads();
+      const count = h.sent.length;
+      for (let step = 0; step < 100; step++) {
+        h.step(100);
+        await h.flush();
+      }
+      h.event("lineChange", { index: 0, position: 6000 });
+      h.setting("language", "translation");
+      await h.flush();
+      assert.equal(h.sent.length, count);
+      assert.deepEqual(h.reads(), reads);
+      h.snapshot({ state: "playing", playing: true, position: 6000 });
+      h.event("playStateChange", { state: "playing", position: 6000 });
+      await h.flush();
+      assert.equal(h.sent.at(-1), "b".repeat(52));
+    }
+  });
+
+  test(`API ${apiLevel} 长句超过 endTime 后保持末页，直到下一行或歌曲结束`, async () => {
+    const h = harness({ apiLevel });
+    await prime(h, [
+      line("a".repeat(52) + "b".repeat(52), 0, 2000),
+      line("下一句", 10000, 12000),
+    ]);
+    assert.equal(h.sent.at(-1), "a".repeat(52));
+    h.step(1100);
+    await h.flush();
+    assert.equal(h.sent.at(-1), "b".repeat(52));
+    h.step(4000);
+    await h.flush();
+    assert.equal(h.sent.at(-1), "b".repeat(52));
+    assert.ok(!h.sent.slice(h.sent.indexOf("a".repeat(52))).includes(""));
+    h.snapshot({ position: 10000 });
+    h.event("lineChange", { index: 1, position: 10000 });
+    await h.flush();
+    assert.equal(h.sent.at(-1), "下一句");
+    h.snapshot({ position: 100000 });
+    h.step(500);
+    await h.flush();
+    assert.equal(h.sent.at(-1), "");
+  });
+}
+
+for (const apiLevel of [3, 4]) {
+  for (const fails of [false, true]) {
+    test(`API ${apiLevel} 暂停后忽略仍在途的进度${fails ? "错误" : "结果"}`, async () => {
+      let blocked = false;
+      let resolve;
+      let reject;
+      const read = () => {
+        if (!blocked)
+          return apiLevel === 3
+            ? 0
+            : {
+                position: 0,
+                state: "playing",
+                playing: true,
+                speed: 1,
+                lyricOffsetMs: 0,
+                sendTimestamp: 100000,
+              };
+        return new Promise((done, fail) => {
+          resolve = done;
+          reject = fail;
+        });
+      };
+      const h = harness({ apiLevel, position: read, snapshot: read });
+      await prime(h, [line("歌词")]);
+      blocked = true;
+      h.step(500);
+      await h.flush();
+      h.event("playStateChange", { state: "paused", position: 500 });
+      await h.flush();
+      const count = h.sent.length;
+      if (fails) reject(new Error("过期请求失败"));
+      else resolve(apiLevel === 3 ? 500 : readSnapshot());
+      await h.flush();
+      h.step(5000);
+      await h.flush();
+      assert.equal(h.sent.at(-1), "");
+      assert.equal(h.sent.length, count);
+      assert.equal(h.warnings.length, 0);
+
+      function readSnapshot() {
+        return {
+          position: 500,
+          state: "playing",
+          playing: true,
+          speed: 1,
+          lyricOffsetMs: 0,
+          sendTimestamp: 100500,
+        };
+      }
+    });
+  }
+}
+
+test("暂停会丢弃排队歌词，慢请求完成后只清屏", async () => {
+  let resolve;
+  let blocked = false;
+  const h = harness({
+    request: async () => {
+      if (blocked) await new Promise((done) => (resolve = done));
+      return { status: 200, body: { ok: true } };
+    },
+  });
+  await prime(h, [line("第一句")]);
+  blocked = true;
+  h.event("lyricChange", { lines: [line("正在发送")] });
+  await h.flush();
+  h.event("lyricChange", { lines: [line("排队歌词")] });
+  h.event("playStateChange", { state: "paused", position: 1000 });
+  blocked = false;
+  resolve();
+  await h.flush();
+  assert.equal(h.sent.at(-1), "");
+  assert.ok(!h.sent.includes("排队歌词"));
+  const count = h.sent.length;
+  h.step(10000);
+  await h.flush();
+  assert.equal(h.sent.length, count);
+});
+
+test("歌词偏移不应把尚未播完的最后一句误判为歌曲结束", async () => {
+  const h = harness();
+  await prime(h, [line("最后一句", 99000, 100000)]);
+  h.snapshot({ position: 99000, lyricOffsetMs: 2000 });
+  h.step(500);
+  await h.flush();
+  assert.equal(h.sent.at(-1), "最后一句");
+  h.snapshot({ position: 100000 });
+  h.step(500);
+  await h.flush();
+  assert.equal(h.sent.at(-1), "");
+});
+
+test("缺少有效 endTime 的长句使用下一行起点分页，空行清屏后不再发送心跳", async () => {
+  const h = harness();
+  await prime(h, [
+    line("a".repeat(52) + "b".repeat(52), 0, 0),
+    line("", 10000, 12000),
+  ]);
+  h.step(5500);
+  await h.flush();
+  assert.equal(h.sent.at(-1), "b".repeat(52));
+  h.step(5000);
+  await h.flush();
+  assert.equal(h.sent.at(-1), "");
+  const count = h.sent.length;
+  h.step(10000);
+  await h.flush();
+  assert.equal(h.sent.length, count);
 });

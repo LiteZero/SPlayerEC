@@ -38,11 +38,21 @@ jobs:
         shell: python
         run: |
           import os
+          import re
           import runpy
+          from pathlib import Path
 
           version = runpy.run_path("splayerec/__init__.py")["__version__"]
           build_version = runpy.run_path("scripts/build.py")["VERSION"]
-          if version != build_version or os.environ["GITHUB_REF_NAME"] != f"v{version}":
+          plugin = Path("plugin/k20gt-lyrics.js").read_text(encoding="utf-8")
+          plugin_version = re.search(r"@version\s+(\S+)", plugin).group(1)
+          installer = Path("installer/setup.nsi").read_text(encoding="utf-8")
+          if (
+              version != build_version
+              or version != plugin_version
+              or f'VIProductVersion "{version}.0"' not in installer
+              or os.environ["GITHUB_REF_NAME"] != f"v{version}"
+          ):
               raise SystemExit("Release tag and source versions must match")
 
       - name: Install build dependencies
@@ -58,13 +68,41 @@ jobs:
           cd dist
           sha256sum -c SHA256SUMS.txt
 
-      - name: Upload installer and portable package
+      - name: Verify standalone plugin and bridge match the portable package
+        shell: python
+        run: |
+          import hashlib
+          import runpy
+          import zipfile
+          from pathlib import Path
+
+          version = runpy.run_path("splayerec/__init__.py")["__version__"]
+          dist = Path("dist")
+          with zipfile.ZipFile(dist / f"SPlayerEC-{version}-x64-portable.zip") as archive:
+              for name, member in [
+                  ("k20gt-lyrics.js", "SPlayerEC/plugin/k20gt-lyrics.js"),
+                  ("SPlayerEC-Bridge.exe", "SPlayerEC/SPlayerEC-Bridge.exe"),
+              ]:
+                  standalone = (dist / name).read_bytes()
+                  if not standalone or standalone != archive.read(member):
+                      raise SystemExit(f"Standalone asset does not match portable package: {name}")
+          if (dist / "k20gt-lyrics.js").read_bytes() != Path("plugin/k20gt-lyrics.js").read_bytes():
+              raise SystemExit("Packaged plugin does not match the release source")
+          checksums = (dist / "SHA256SUMS.txt").read_text(encoding="utf-8")
+          for name in ["k20gt-lyrics.js", "SPlayerEC-Bridge.exe"]:
+              digest = hashlib.sha256((dist / name).read_bytes()).hexdigest()
+              if f"{digest}  {name}" not in checksums.splitlines():
+                  raise SystemExit(f"Missing asset checksum: {name}")
+
+      - name: Upload installer, portable package, plugin and bridge
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: SPlayerEC-windows-x64
           path: |
             dist/*-x64-setup.exe
             dist/*-x64-portable.zip
+            dist/k20gt-lyrics.js
+            dist/SPlayerEC-Bridge.exe
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
@@ -97,6 +135,8 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             dist/*-x64-setup.exe \
             dist/*-x64-portable.zip \
+            dist/k20gt-lyrics.js \
+            dist/SPlayerEC-Bridge.exe \
             dist/SHA256SUMS.txt \
             --verify-tag \
             --title "SPlayerEC $GITHUB_REF_NAME" \

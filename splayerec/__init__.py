@@ -3,4 +3,4 @@
 
 """SPlayerEC 独立 K20 GT 歌词桥接程序"""
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"

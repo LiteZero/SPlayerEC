@@ -38,7 +38,7 @@ app.setPath("userData", ${JSON.stringify(path.join(build, "user-data"))});
 app.disableHardwareAcceleration();
 const pluginId = "litezero.k20gt-lyrics";
 let worker;
-let snapshot = { position: 0, state: "paused", playing: false, speed: 1, lyricOffsetMs: 0, sendTimestamp: Date.now() };
+let snapshot = { position: 0, state: "playing", playing: true, speed: 1, lyricOffsetMs: 0, sendTimestamp: Date.now() };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const write = () => fs.writeFileSync(${JSON.stringify(path.join(root, "tests/host-smoke.json"))}, JSON.stringify(report, null, 2));
 const announce = message => { console.log(message); write(); };
@@ -83,7 +83,7 @@ app.whenReady().then(async () => {
     if (msg.kind === "hostCall") {
       try {
         let data;
-        if (msg.method === "player.getNowPlaying") data = { ...snapshot };
+        if (msg.method === "player.getNowPlaying") data = { ...snapshot, sendTimestamp: Date.now() };
         else if (msg.method === "request") {
           const [url, options] = msg.args;
           assert.equal(url, "http://127.0.0.1:19620/v1/display");
@@ -106,7 +106,7 @@ app.whenReady().then(async () => {
   assert.ok(report.registration.events.includes("lyricChange"));
   send("trackChange", { track: { id: "smoke", duration: 100000 } });
   send("lyricChange", { lines: lyric("SPlayerEC 歌词测试") });
-  send("playStateChange", { state: "paused", position: 0 });
+  send("playStateChange", { state: "playing", position: 0 });
   let state = await expectText("SPlayerEC 歌词测试");
   const long = "中文分页测试".repeat(5);
   anchor({ position: 1000 });
