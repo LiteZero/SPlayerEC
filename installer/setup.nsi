@@ -3,16 +3,16 @@ Unicode true
 !include "x64.nsh"
 
 Name "SPlayerEC"
-OutFile "..\dist\SPlayerEC-1.0.2-x64-setup.exe"
+OutFile "..\dist\SPlayerEC-1.0.3-x64-setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\SPlayerEC"
 InstallDirRegKey HKCU "Software\SPlayerEC" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 BrandingText "SPlayerEC · K20 GT 歌词互联"
-VIProductVersion "1.0.2.0"
+VIProductVersion "1.0.3.0"
 VIAddVersionKey "ProductName" "SPlayerEC"
 VIAddVersionKey "FileDescription" "SPlayerEC 安装程序"
-VIAddVersionKey "FileVersion" "1.0.2"
+VIAddVersionKey "FileVersion" "1.0.3"
 VIAddVersionKey "LegalCopyright" "SPlayerEC contributors"
 
 !define MUI_ABORTWARNING
@@ -37,11 +37,11 @@ FunctionEnd
 Section "SPlayerEC"
   SetShellVarContext current
   SetOutPath "$INSTDIR"
-  File /r "..\dist\SPlayerEC-1.0.2-portable\*"
+  File /r "..\dist\SPlayerEC-1.0.3-portable\*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\SPlayerEC" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPlayerEC" "DisplayName" "SPlayerEC · K20 GT 歌词互联"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPlayerEC" "DisplayVersion" "1.0.2"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPlayerEC" "DisplayVersion" "1.0.3"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPlayerEC" "DisplayIcon" "$INSTDIR\SPlayerEC-Bridge.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPlayerEC" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SPlayerEC" "NoModify" 1
@@ -75,6 +75,7 @@ Section "Uninstall"
   Delete "$INSTDIR\SPlayerEC-1.0.0-source.zip"
   Delete "$INSTDIR\SPlayerEC-1.0.1-source.zip"
   Delete "$INSTDIR\SPlayerEC-1.0.2-source.zip"
+  Delete "$INSTDIR\SPlayerEC-1.0.3-source.zip"
   Delete "$INSTDIR\plugin\k20gt-lyrics.js"
   RMDir "$INSTDIR\plugin"
   Delete "$INSTDIR\Uninstall.exe"

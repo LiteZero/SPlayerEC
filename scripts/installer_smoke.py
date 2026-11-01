@@ -33,7 +33,7 @@ def main():
     directory = (ROOT / "build" / "installer-smoke").resolve()
     if directory.parent != (ROOT / "build").resolve() or directory.exists():
         raise RuntimeError("安装测试目录必须是尚不存在的 build/installer-smoke")
-    installer = ROOT / "dist" / "SPlayerEC-1.0.2-x64-setup.exe"
+    installer = ROOT / "dist" / "SPlayerEC-1.0.3-x64-setup.exe"
     report = {"installed": False, "launched": False, "uninstalled": False}
     subprocess.run(
         [str(installer), "/S", f"/D={directory}"], check=True, timeout=45, creationflags=0x08000000
@@ -46,7 +46,7 @@ def main():
         assert (
             hashlib.sha256((directory / name).read_bytes()).digest()
             == hashlib.sha256(
-                (ROOT / "dist" / "SPlayerEC-1.0.2-portable" / name).read_bytes()
+                (ROOT / "dist" / "SPlayerEC-1.0.3-portable" / name).read_bytes()
             ).digest()
         )
     child = subprocess.Popen([str(executable), "--tray"], creationflags=0x08000000)

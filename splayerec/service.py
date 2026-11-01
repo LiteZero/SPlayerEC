@@ -10,6 +10,7 @@ import time
 from .protocol import encode_report
 
 LEASE_SECONDS = 8
+DEVICE_CHECK_SECONDS = 2
 log = logging.getLogger("splayerec.usb")
 
 
@@ -53,7 +54,7 @@ class BridgeService:
         """串行写入并合并积压页面，在失联、异常和退出时释放句柄"""
         device = None
         sent = None
-        last_write = 0
+        last_check = 0
         retry_at = 0
         previous_error = ""
         try:
@@ -77,11 +78,15 @@ class BridgeService:
                         if device is None:
                             device = self._factory()
                             sent = None
-                        if sent != text or now - last_write >= 3:
+                        if sent != text:
                             device.show(text)
-                            sent, last_write = text, time.monotonic()
+                            sent, last_check = text, time.monotonic()
                             with self._lock:
                                 self._status["writes"] += 1
+                        elif now - last_check >= DEVICE_CHECK_SECONDS:
+                            # 心跳只续租；只读探测断线，避免重复文字重置音箱滚动。
+                            device.check_connected()
+                            last_check = time.monotonic()
                         previous_error = ""
                         with self._lock:
                             self._status.update(state="connected", error="")

@@ -253,6 +253,13 @@ class K20GT:
         """显示一页文字，空文字退出歌词通道"""
         self.api.write_report(self.handle, encode_report(text))
 
+    def check_connected(self):
+        """只读检查现有句柄，避免使用重复文字写入探测断线"""
+        attributes = Attributes()
+        attributes.size = c.sizeof(attributes)
+        if self.handle is None or not self.api.attributes(self.handle, c.byref(attributes)):
+            raise OSError("K20 GT 已断开，请检查 USB 连接")
+
     def close(self):
         """关闭当前设备句柄"""
         if self.handle is not None:

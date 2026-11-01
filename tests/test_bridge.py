@@ -9,6 +9,7 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from splayerec.http_server import start_server
@@ -31,6 +32,8 @@ class FakeDevice:
         """保存实际发送的短文本，不模拟内部实现"""
         self.writes = []
         self.closed = False
+        self.connected = True
+        self.checks = 0
 
     def show(self, text):
         """记录设备输出"""
@@ -39,6 +42,12 @@ class FakeDevice:
     def close(self):
         """记录句柄已释放"""
         self.closed = True
+
+    def check_connected(self):
+        """模拟不刷新屏幕的 USB 断线探测"""
+        self.checks += 1
+        if not self.connected:
+            raise OSError("设备已拔出")
 
 
 class ProtocolTests(unittest.TestCase):
@@ -67,6 +76,59 @@ class ProtocolTests(unittest.TestCase):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_long_page_heartbeats_do_not_restart_display(self):
+        """长句同页跨过旧三秒重写周期也只写一次，翻页时才更新"""
+        device = FakeDevice()
+        clock = SimpleNamespace(now=100.0)
+        clock.monotonic = lambda: clock.now
+        with patch("splayerec.service.time", clock):
+            service = BridgeService(lambda: device)
+            try:
+                text = "这是一句需要滚动显示的长歌词页面"
+                service.submit(text)
+                eventually(lambda: device.writes == [text])
+                for _ in range(5):
+                    checks = device.checks
+                    clock.now += 2.1
+                    service.submit(text)
+                    eventually(lambda: device.checks > checks)
+                    self.assertEqual(device.writes, [text])
+                    self.assertEqual(service.snapshot()["writes"], 1)
+                    self.assertTrue(service.snapshot()["active"])
+                service.submit("下一页")
+                eventually(lambda: device.writes == [text, "下一页"])
+                self.assertEqual(service.snapshot()["writes"], 2)
+            finally:
+                service.stop()
+
+    def test_read_only_disconnect_check_recovers_same_page(self):
+        """不重写同页仍能探测拔插，重连后仅恢复当前页一次"""
+        first, second = FakeDevice(), FakeDevice()
+        devices = iter([first, second])
+        clock = SimpleNamespace(now=100.0)
+        clock.monotonic = lambda: clock.now
+        with patch("splayerec.service.time", clock):
+            service = BridgeService(lambda: next(devices))
+            try:
+                service.submit("保持同一页")
+                eventually(lambda: first.writes == ["保持同一页"])
+                first.connected = False
+                clock.now += 2.1
+                service.submit("保持同一页")
+                eventually(lambda: first.closed)
+                self.assertEqual(service.snapshot()["state"], "disconnected")
+                clock.now += 2.1
+                service.submit("保持同一页")
+                eventually(lambda: second.writes == ["保持同一页"])
+                clock.now += 2.1
+                service.submit("保持同一页")
+                eventually(lambda: second.checks > 0)
+                self.assertEqual(first.writes, ["保持同一页"])
+                self.assertEqual(second.writes, ["保持同一页"])
+                self.assertEqual(service.snapshot()["writes"], 2)
+            finally:
+                service.stop()
+
     def test_clear_and_shutdown_release(self):
         """收到清屏后释放设备，退出时也清屏释放"""
         devices = []
@@ -192,6 +254,29 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(data["app"], "SPlayerEC")
         self.assertEqual(data["state"], "connected")
         self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
+
+    def test_heartbeat_requests_keep_page_alive_without_rewriting(self):
+        """实际 HTTP 心跳续期超过八秒仍只显示一次，失联后清屏"""
+        clock = SimpleNamespace(now=100.0)
+        clock.monotonic = lambda: clock.now
+        text = "这是一句需要滚动显示的长歌词页面"
+        with patch("splayerec.service.time", clock):
+            for index in range(6):
+                checks = self.device.checks
+                with self.request(json.dumps({"text": text}).encode()) as response:
+                    self.assertEqual(response.status, 200)
+                if index == 0:
+                    eventually(lambda: bool(self.device.writes))
+                else:
+                    eventually(lambda: self.device.checks > checks)
+                self.assertEqual(self.device.writes, [text])
+                self.assertEqual(self.service.snapshot()["writes"], 1)
+                self.assertTrue(self.service.snapshot()["active"])
+                clock.now += 2.1
+            clock.now += 8
+            eventually(lambda: self.device.closed)
+            self.assertEqual(self.device.writes, [text, ""])
+            self.assertFalse(self.service.snapshot()["active"])
 
     def test_reject_cross_site(self):
         """拒绝浏览器 Origin、错误 Host 和表单提交"""

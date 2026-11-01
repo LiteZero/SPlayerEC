@@ -4,7 +4,7 @@
  *
  * @name K20 GT 音箱歌词
  * @id litezero.k20gt-lyrics
- * @version 1.0.2
+ * @version 1.0.3
  * @description 通过本机 SPlayerEC 桥接程序显示歌词，无需修改播放器
  * @author LiteZero
  * @type control
